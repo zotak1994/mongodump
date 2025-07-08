@@ -1,5 +1,6 @@
 const { spawn } = require('child_process');
-const fs = require('fs');
+const fs = require('fs').promises;
+const fsSync = require('fs');
 const path = require('path');
 const archiver = require('archiver');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
@@ -9,10 +10,12 @@ require('dotenv').config();
 const dumpDir = path.join(__dirname, 'dump');
 const archiveDir = path.join(__dirname, 'mongo');
 
-// Ensure directory exists
-function ensureDirExists(dirPath) {
-    if (!fs.existsSync(dirPath)) {
-        fs.mkdirSync(dirPath, { recursive: true });
+// Ensure directory exists (async)
+async function ensureDirExists(dirPath) {
+    try {
+        await fs.mkdir(dirPath, { recursive: true });
+    } catch (err) {
+        if (err.code !== 'EEXIST') throw err;
     }
 }
 
@@ -25,33 +28,29 @@ function generatePaths() {
     };
 }
 
-// Run MongoDB dump
-function runDump(dumpPath) {
+// Run MongoDB dump (async)
+async function runDump(dumpPath) {
     console.log('🛠️ Starting MongoDB dump...');
+    await ensureDirExists(dumpPath);
     return new Promise((resolve, reject) => {
         const dump = spawn('mongodump', [`--uri=${process.env.MONGODB_URI}`, `--out=${dumpPath}`]);
-
         dump.stdout?.on('data', data => console.log(`mongodump stdout: ${data}`));
         dump.stderr?.on('data', data => console.error(`mongodump stderr: ${data}`));
-
         dump.on('close', code => code === 0 ? resolve() : reject(new Error(`mongodump failed with code ${code}`)));
     });
 }
 
-// Compress dumped data into ZIP
-function compressDump(sourceDir, archivePath) {
+// Compress dumped data into ZIP (async)
+async function compressDump(sourceDir, archivePath) {
     console.log('📦 Compressing MongoDB dump...');
-    ensureDirExists(path.dirname(archivePath));
-
+    await ensureDirExists(path.dirname(archivePath));
     return new Promise((resolve, reject) => {
-        const output = fs.createWriteStream(archivePath);
+        const output = fsSync.createWriteStream(archivePath);
         const archive = archiver('zip', { zlib: { level: 9 } });
-
         output.on('close', () => {
             console.log(`📁 Archive created: ${archive.pointer()} bytes`);
             resolve();
         });
-
         archive.on('error', reject);
         archive.pipe(output);
         archive.directory(sourceDir, false);
@@ -59,10 +58,9 @@ function compressDump(sourceDir, archivePath) {
     });
 }
 
-// Upload ZIP to S3
+// Upload ZIP to S3 (async)
 async function uploadToS3(archivePath, timestamp) {
     console.log('☁️ Uploading backup to S3...');
-
     const s3 = new S3Client({
         region: process.env.REGION,
         credentials: {
@@ -70,30 +68,28 @@ async function uploadToS3(archivePath, timestamp) {
             secretAccessKey: process.env.SECRET_ACCESS_KEY,
         },
     });
-
-    const fileStream = fs.createReadStream(archivePath);
+    const fileStream = fsSync.createReadStream(archivePath);
     const uploadParams = {
         Bucket: process.env.BUCKET_NAME,
         Key: `mongodump/backup-${timestamp}.zip`,
         Body: fileStream,
     };
-
     await s3.send(new PutObjectCommand(uploadParams));
     console.log('✅ Upload complete!');
 }
 
-// Cleanup files
-function cleanup(paths) {
+// Cleanup files (async)
+async function cleanup(paths) {
     console.log('🧹 Cleaning up temporary files...');
     try {
-        fs.rmSync(dumpDir, { recursive: true, force: true });
-        fs.rmSync(paths.archivePath, { force: true });
+        await fs.rm(dumpDir, { recursive: true, force: true });
+        await fs.rm(paths.archivePath, { force: true });
     } catch (err) {
         console.error('Cleanup failed:', err);
     }
 }
 
-// Master backup task
+// Master backup task (async)
 async function performBackup() {
     const paths = generatePaths();
     try {
@@ -104,12 +100,13 @@ async function performBackup() {
     } catch (err) {
         console.error(`❌ Error during backup at ${new Date().toISOString()}:`, err);
     } finally {
-        cleanup(paths);
+        await cleanup(paths);
     }
 }
 
-// Run immediately
-performBackup();
+console.log('🔔 MongoDB backup script initialized.');
 
-// Schedule at 2 AM daily
-cron.schedule('0 2 * * *', performBackup);
+// Schedule at 2 AM daily in a specific timezone (e.g., Asia/Kolkata)
+cron.schedule(process.env.CRON_EXPRESSION || '0 2 * * *', performBackup, {
+    timezone: process.env.TIMEZONE || 'Asia/Kolkata'
+});

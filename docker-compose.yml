@@ -1,0 +1,7 @@
+services:
+  mongodump:
+    build: .
+    container_name: mongodump-backup
+    env_file:
+      - .env
+    restart: unless-stopped
