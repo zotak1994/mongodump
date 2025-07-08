@@ -30,6 +30,7 @@ SECRET_ACCESS_KEY=...
 BUCKET_NAME=YOUR_BUCKET_NAME
 REGION=ap-south-1
 CRON_EXPRESSION=* * * * *
+TIMEZONE=Asia/Kolkata
 ```
 
 ### 2️⃣ Run with Docker
