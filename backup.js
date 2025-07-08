@@ -34,8 +34,6 @@ async function runDump(dumpPath) {
     await ensureDirExists(dumpPath);
     return new Promise((resolve, reject) => {
         const dump = spawn('mongodump', [`--uri=${process.env.MONGODB_URI}`, `--out=${dumpPath}`]);
-        dump.stdout?.on('data', data => console.log(`mongodump stdout: ${data}`));
-        dump.stderr?.on('data', data => console.error(`mongodump stderr: ${data}`));
         dump.on('close', code => code === 0 ? resolve() : reject(new Error(`mongodump failed with code ${code}`)));
     });
 }
@@ -75,6 +73,7 @@ async function uploadToS3(archivePath, timestamp) {
         Body: fileStream,
     };
     await s3.send(new PutObjectCommand(uploadParams));
+    console.log(`☁️ Backup uploaded to S3: ${uploadParams.Key}`);
     console.log('✅ Upload complete!');
 }
 

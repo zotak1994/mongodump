@@ -19,8 +19,21 @@ Built for portability and ease-of-use — just provide your environment variable
 
 ## 🚀 Quick Start
 
-### 1️⃣ Clone the Repo
+### 1️⃣ Set Environment Variables
+
+Create a `.env` file with the following variables:
+
+```env
+MONGODB_URI=...
+ACCESS_KEY_ID=...
+SECRET_ACCESS_KEY=...
+BUCKET_NAME=bt-mmp-prod
+REGION=ap-south-1
+CRON_EXPRESSION=* * * * *
+```
+
+### 2️⃣ Run with Docker
 
 ```bash
-git clone https://github.com/your-org/mongo-backup.git
-cd mongo-backup
+docker run --env-file .env zotak007/mongo-backup
+```
