@@ -35,5 +35,5 @@ CRON_EXPRESSION=* * * * *
 ### 2️⃣ Run with Docker
 
 ```bash
-docker run --env-file .env zotak007/mongo-backup
+docker run -d --env-file .env zotak007/mongo-backup
 ```
